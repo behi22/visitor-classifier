@@ -13,7 +13,10 @@ import os
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-CORS(app, resources={r"/classify": {"origins": "https://webscraper-behbod-babai.vercel.app"}}, supports_credentials=True)
+CORS(app, resources={r"/classify": {"origins": "https://webscraper-behbod-babai.vercel.app",
+                                    "allow_headers": "Content-Type, Authorization",
+                                    "supports_credentials": True,
+                                    "methods": ["POST", "OPTIONS"]}})
 
 # Redis configuration from environment variables
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -45,9 +48,11 @@ def get_db_connection():
 def classify():
     if request.method == "OPTIONS":
         response = jsonify({})
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Origin', 'https://webscraper-behbod-babai.vercel.app')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '1800')
         return response
     
     try:
@@ -89,8 +94,11 @@ def classify():
 
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Origin', 'https://webscraper-behbod-babai.vercel.app')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '1800')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'PUT, POST, GET, DELETE, PATCH, OPTIONS')
     return response
 
 def scrape_content(url):
@@ -308,7 +316,6 @@ def store_questions_in_db(url, questions):
     except Exception as e:
         print(f"Error storing questions in database: {e}")
         return jsonify({"error": "Internal server error"}), 500
-
     except Exception as e:
         print(f"Error storing questions in database: {e}")
 
