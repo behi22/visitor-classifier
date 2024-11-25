@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from bs4 import BeautifulSoup
 import requests
@@ -6,62 +7,50 @@ import spacy
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
 import redis
-import psycopg2
 import json
 import random
 import os
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-CORS(app, resources={r"/classify": {"origins": "https://webscraper-behbod-babai.vercel.app",
-                                    "allow_headers": "Content-Type, Authorization",
-                                    "supports_credentials": True,
-                                    "methods": ["POST", "OPTIONS"]}})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Redis configuration from environment variables
-redis_host = os.getenv('REDIS_HOST', 'localhost')
-redis_port = os.getenv('REDIS_PORT', 6379)
+redis_host = os.environ.get('REDIS_HOST')
+redis_port = os.environ.get('REDIS_PORT')
+redis_password = os.environ.get('REDIS_PASSWORD')
 
 # Connect to Redis for caching
-redis_cache = redis.StrictRedis(host=redis_host, port=redis_port, db=0, decode_responses=True)
+redis_cache = redis.StrictRedis(host=redis_host, port=redis_port, password=redis_password, db=0, decode_responses=True)
 redis_cache.flushall()  # Redis reset
-
-# Test Redis connection during app startup
-try:
-    redis_cache.ping()
-    print("Redis connected successfully.")
-except redis.exceptions.ConnectionError as e:
-    print(f"Redis connection failed: {str(e)}")
 
 # Set up NLP
 nlp = spacy.load("en_core_web_sm")
 
-# PostgreSQL configuration from environment variables
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_NAME = os.getenv('DB_NAME', 'WebScraper-Database')
-DB_USER = os.getenv('DB_USER', 'postgres')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'Password')
+# PostgreSQL configuration using Flask-SQLAlchemy
+DB_HOST = os.environ.get('DB_HOST')
+DB_NAME = os.environ.get('DB_NAME')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
-def get_db_connection():
-    conn = psycopg2.connect(
-        host=DB_HOST,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
-    return conn
+app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-@app.route('/classify', methods=["OPTIONS", "POST"])
+db = SQLAlchemy(app)
+
+# Define the Questions model
+class Question(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    url = db.Column(db.String, nullable=False)
+    question = db.Column(db.String, nullable=False)
+    option1 = db.Column(db.String, nullable=True)
+    option2 = db.Column(db.String, nullable=True)
+    option3 = db.Column(db.String, nullable=True)
+    option4 = db.Column(db.String, nullable=True)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+@app.route('/classify', methods=['POST'])
 def classify():
-    if request.method == "OPTIONS":
-        response = jsonify({})
-        response.headers.add('Access-Control-Allow-Origin', 'https://webscraper-behbod-babai.vercel.app')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        response.headers.add('Access-Control-Max-Age', '1800')
-        return response
-    
     try:
         data = request.get_json()  # Get data as JSON
         url = data.get('url')  # Extract URL from the body
@@ -98,15 +87,6 @@ def classify():
     except Exception as e:
         print(f"Error in classify endpoint: {e}")
         return jsonify({"error": str(e)}), 500
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', 'https://webscraper-behbod-babai.vercel.app')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Max-Age', '1800')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'PUT, POST, GET, DELETE, PATCH, OPTIONS')
-    return response
 
 def scrape_content(url):
     try:
@@ -158,37 +138,37 @@ def generate_questions(content, from_url=True):
     # Define question templates with dynamic options based on the content
     question_templates = [
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"What is your opinion on '{t}'?",
             "options": generate_dynamic_options(t, "opinion")
         },
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"Would you like to learn more about '{t}'?",
             "options": ["Yes", "No"]
         },
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"How important is '{t}' to you?",
             "options": generate_dynamic_options(t, "importance")
         },
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"Where do you think '{t}' fits best?",
             "options": generate_dynamic_options(t, "fit")
         },
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"On a scale of 1-5, how would you rate your interest in '{t}'?",
             "options": generate_dynamic_options(t, "interest")
         },
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"Do you agree with the statement: '{t}' is revolutionary?",
             "options": generate_dynamic_options(t, "agreement")
         },
         lambda t: {
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": f"What challenges might you foresee with '{t}'?",
             "options": generate_dynamic_options(t, "challenges")
         },
@@ -210,7 +190,7 @@ def generate_questions(content, from_url=True):
     # Fallback question if none are generated
     if not questions:
         questions.append({
-            "questionId": random.randint(1000, 9999),  # Add unique question ID
+            "questionId": random.randint(1000, 9999),
             "question": "What is your overall impression of this content?",
             "options": ["Interesting", "Boring", "Confusing"]
         })
@@ -245,7 +225,6 @@ def generate_dynamic_options(topic, question_type):
     Generates dynamic multiple-choice options based on the topic and question type.
     The question type helps tailor the options more specifically to the context.
     """
-    # Example of generating dynamic options based on the topic
     if question_type == "opinion":
         return ["Positive", "Negative", "Neutral"]
     elif question_type == "importance":
@@ -255,76 +234,31 @@ def generate_dynamic_options(topic, question_type):
     elif question_type == "interest":
         return ["1", "2", "3", "4", "5"]
     elif question_type == "agreement":
-        return ["Agree", "Disagree", "Not Sure"]
+        return ["Strongly agree", "Agree", "Neutral", "Disagree", "Strongly disagree"]
     elif question_type == "challenges":
-        # Challenges based on the type of topic (e.g., technology, product, etc.)
-        if "technology" in topic.lower():
-            return ["High cost", "Implementation difficulties", "Resistance to change"]
-        elif "event" in topic.lower():
-            return ["Unexpected consequences", "Lack of preparation", "Public backlash"]
-        elif "product" in topic.lower():
-            return ["Supply chain issues", "Quality control", "Market competition"]
-        else:
-            return ["Time constraints", "Resource limitations", "Knowledge gaps"]
+        return ["Lack of understanding", "Cost", "Implementation", "None"]
     else:
-        return ["Agree", "Disagree", "Not Sure"]  # Default fallback options
-
-def categorize_fallback(content):
-    """
-    Provides fallback categories based on the type of content.
-    """
-    if "event" in content.lower():
-        return ["key facts about this event", "impacts of this event on the industry"]
-    elif "product" in content.lower():
-        return ["product benefits", "product challenges"]
-    elif "technology" in content.lower():
-        return ["future trends in technology", "challenges in adopting new technologies"]
-    else:
-        return ["general knowledge", "specific details"]
+        return ["Yes", "No", "Maybe"]
 
 def store_questions_in_db(url, questions):
+    """
+    Stores questions in PostgreSQL database.
+    """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(''' 
-            CREATE TABLE IF NOT EXISTS questions (
-                id SERIAL PRIMARY KEY,
-                url TEXT NOT NULL,
-                question TEXT NOT NULL,
-                option1 TEXT,
-                option2 TEXT,
-                option3 TEXT,
-                option4 TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        for question in questions:
+            q = Question(
+                url=url,
+                question=question["question"],
+                option1=question["options"][0] if len(question["options"]) > 0 else None,
+                option2=question["options"][1] if len(question["options"]) > 1 else None,
+                option3=question["options"][2] if len(question["options"]) > 2 else None,
+                option4=question["options"][3] if len(question["options"]) > 3 else None
             )
-        ''')
-
-        for q in questions:
-            cursor.execute('''
-                INSERT INTO questions (url, question, option1, option2, option3, option4)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            ''', (
-                url,
-                q['question'],
-                q['options'][0],
-                q['options'][1],
-                q['options'][2] if len(q['options']) > 2 else None,
-                q['options'][3] if len(q['options']) > 3 else None
-            ))
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-    
-    except psycopg2.OperationalError as e:
-        print(f"Database connection error: {e}")
-        return jsonify({"error": "Database connection failure"}), 500
+            db.session.add(q)
+        db.session.commit()
     except Exception as e:
-        print(f"Error storing questions in database: {e}")
-        return jsonify({"error": "Internal server error"}), 500
-    except Exception as e:
-        print(f"Error storing questions in database: {e}")
+        db.session.rollback()
+        print(f"Error storing questions: {e}")
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
