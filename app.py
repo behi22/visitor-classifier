@@ -15,7 +15,7 @@ import os
 def create_app():
     app = Flask(__name__)
     app.config['DEBUG'] = True
-    CORS(app, resources={r"/*": {"origins": "*"}})
+    CORS(app, resources={r"/*": {"origins": "*", "supports_credentials": True}})
 
     # Redis configuration from environment variables
     redis_host = os.environ.get('REDIS_HOST')
