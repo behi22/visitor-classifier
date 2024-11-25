@@ -13,7 +13,7 @@ import os
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-CORS(app, resources={r"/classify": {"origins": ["https://visitor-classifier.vercel.app", "https://webscraper-behbod-babai.vercel.app"]}})
+CORS(app)
 
 # Redis configuration from environment variables
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -41,8 +41,15 @@ def get_db_connection():
     )
     return conn
 
-@app.route('/classify', methods=['POST'])
+@app.route('/classify', methods=["OPTIONS", "POST"])
 def classify():
+    if request.method == "OPTIONS":
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+    
     try:
         data = request.get_json()  # Get data as JSON
         url = data.get('url')  # Extract URL from the body
