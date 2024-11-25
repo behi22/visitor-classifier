@@ -26,6 +26,13 @@ redis_port = os.getenv('REDIS_PORT', 6379)
 redis_cache = redis.StrictRedis(host=redis_host, port=redis_port, db=0, decode_responses=True)
 redis_cache.flushall()  # Redis reset
 
+# Test Redis connection during app startup
+try:
+    redis_cache.ping()
+    print("Redis connected successfully.")
+except redis.exceptions.ConnectionError as e:
+    print(f"Redis connection failed: {str(e)}")
+
 # Set up NLP
 nlp = spacy.load("en_core_web_sm")
 
