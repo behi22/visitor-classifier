@@ -13,7 +13,7 @@ import os
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-CORS(app, resources={r"/classify": {"origins": "https://visitor-classifier.vercel.app"}})
+CORS(app, resources={r"/classify": {"origins": ["https://visitor-classifier.vercel.app", "https://webscraper-behbod-babai.vercel.app"]}})
 
 # Redis configuration from environment variables
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -79,6 +79,12 @@ def classify():
     except Exception as e:
         print(f"Error in classify endpoint: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    return response
 
 def scrape_content(url):
     try:
