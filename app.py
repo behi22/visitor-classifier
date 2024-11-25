@@ -9,12 +9,7 @@ import redis
 import psycopg2
 import json
 import random
-import re
-from dotenv import load_dotenv
 import os
-
-# Load environment variables from .env file
-load_dotenv()
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -33,7 +28,7 @@ nlp = spacy.load("en_core_web_sm")
 
 # PostgreSQL configuration from environment variables
 DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_NAME = os.getenv('DB_NAME', 'visitor_classifier')
+DB_NAME = os.getenv('DB_NAME', 'WebScraper-Database')
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'Password')
 
