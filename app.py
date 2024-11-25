@@ -13,7 +13,7 @@ import os
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-CORS(app)
+CORS(app, resources={r"/classify": {"origins": "https://webscraper-behbod-babai.vercel.app"}}, supports_credentials=True)
 
 # Redis configuration from environment variables
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -301,6 +301,13 @@ def store_questions_in_db(url, questions):
         conn.commit()
         cursor.close()
         conn.close()
+    
+    except psycopg2.OperationalError as e:
+        print(f"Database connection error: {e}")
+        return jsonify({"error": "Database connection failure"}), 500
+    except Exception as e:
+        print(f"Error storing questions in database: {e}")
+        return jsonify({"error": "Internal server error"}), 500
 
     except Exception as e:
         print(f"Error storing questions in database: {e}")
