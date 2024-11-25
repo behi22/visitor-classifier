@@ -13,7 +13,7 @@ import os
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/classify": {"origins": "https://visitor-classifier.vercel.app"}})
 
 # Redis configuration from environment variables
 redis_host = os.getenv('REDIS_HOST', 'localhost')
